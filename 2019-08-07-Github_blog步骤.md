@@ -1,14 +1,14 @@
 ---
 layout:     post
-title:      linux学习
-subtitle:   linux 学习方法路线
+title:      汇编语言学习6
+subtitle:   第一个汇编程序
 date:       2019-08-09
 header-img: img/post-first-blog-web.jpg
 catalog: true
 tags:
     - linux学习路径
     - linux
-    - 操作系统
+    - Intel8086
     
 ---
 ##linux 学习路线一
