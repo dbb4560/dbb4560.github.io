@@ -12,7 +12,15 @@ tags:
     
 ---
 ##背景
-1. 最近想试试用Jekyll在Github搭建blog。选取网站模板，修改域名等等这些网上都有很详细的教程了，https://github.com/Huxpro/huxpro.github.io，直接folk，安装说明在readme.md。Jekyll 在github 也有一大堆site 案列 ： https://github.com/jekyll/jekyll/wiki/sites 。本文主要记录在Windows本地安装jekyll环境的过程，遇到的问题及如何解决的。
+1. 最近想试试用Jekyll在Github搭建blog。选取网站模板，修改域名等等这些网上都有很详细的教程了，
+ 
+<https://github.com/Huxpro/huxpro.github.io>
+
+直接folk，安装说明在readme.md。Jekyll 在github 也有一大堆site 案列 ：
+
+< https://github.com/jekyll/jekyll/wiki/sites >
+
+本文主要记录在Windows本地安装jekyll环境的过程，遇到的问题及如何解决的。
 
 
 ##安装环境
@@ -36,47 +44,60 @@ tags:
 
 rubyinstaller-devkit-2.6.3-1-x64.exe 安装包：
 
-https://pan.baidu.com/s/1cYILP_pFil_l9VkO23hyuA&shfl=sharepset
+<https://pan.baidu.com/s/1cYILP_pFil_l9VkO23hyuA&shfl=sharepset>
 
 2. 安装RubyGems
 
 rubygems-3.0.4.zip安装包：
 
-https://pan.baidu.com/s/1WVYr0khAoOYkMqJf6VC5ew&shfl=sharepset
+<https://pan.baidu.com/s/1WVYr0khAoOYkMqJf6VC5ew&shfl=sharepset>
 
 Windows中下载ZIP格式比较方便，下载后解压到任意路径。打开Windows的cmd界面，输入命令：
 
 $ cd {unzip-path} // unzip-path表示解压的路径，比如我的就是
-Cd  d\Jekyll\RubyGems\rubygems-3.0.4
+
+```
+Cd  d\Jekyll\RubyGems\rubygems-3.0.4 
 $ ruby setup.rb
+```
 
 3. 安装Jekyll
 
 在cmd中输入:
 
-$ gem install Jekyll
+`$ gem install Jekyll`
+
 此时报错
+
+```
 ERROR:  Could not find a valid gem 'jekll' (>= 0) in any repository
 ERROR:  Possible alternatives: Jekyll
+```
 
 从字面意思可以猜测出应该是网络问题，在网上searching了一下还在Jekyll的Github主页上添加了一个issue（结果被大神告知这不是Jekyll的问题是ruby的问题啊，捂脸逃～）。最后找到解决办法，将gem的镜像源改到淘宝镜像。
 
 4. 删除默认的gem源
-gem sources --remove http://rubygems.org/
+`gem sources --remove http://rubygems.org/`
 
 增加taobao作为gem源
 
-gem sources -a http://ruby.taobao.org/
+`gem sources -a http://ruby.taobao.org/`
 去 https://ruby.taobao.org/ 网站查看 
 发现这句话
 
-中国 ruby 镜像交由社区打理，本站请求已重定向到 http://gems.ruby-china.org/
+中国 ruby 镜像交由社区打理，本站请求已重定向到 
+
+`http://gems.ruby-china.org/`
 
 把镜像改成上面这个链接就可以了。
 如何使用？
+
+```
 $ gem sources --add https://gems.ruby-china.org/ --remove https://rubygems.org/
 $ gem sources -l
 *** CURRENT SOURCES ***
+
+```
 
 https://gems.ruby-china.org
  "# 请确保只有 gems.ruby-china.org "
@@ -86,19 +107,19 @@ $ gem install rails
 gem sources -a http://gems.ruby-china.org/
 原因是 ruby-china 更换了域名
 
-https://gems.ruby-china.com
+`https://gems.ruby-china.com`
 
-gem sources -a https://gems.ruby-china.com
+`gem sources -a https://gems.ruby-china.com`
 
 5. 查看当前的gem源
-gem sources
+`gem sources`
 
 6. 清空源缓存
-gem sources -c
+`gem sources -c`
 
 7. 更新源缓存
 
-gem sources -u
+`gem sources -u`
 这个时间比较长，可能几分钟
 
 于是问题解决。
@@ -106,11 +127,11 @@ gem sources -u
 
 8. 安装jekyll-paginate
 在cmd中输入：
-$ gem install jekyll-paginate
+`$ gem install jekyll-paginate`
 
 9. 验证安装完成
 在cmd中输入：
-$ jekyll -v
+`$ jekyll -v`
 输出版本说明安装完成（我的版本为3.7.3）
 
 ![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191019234729.png)
@@ -150,7 +171,7 @@ Results logged to C:/Ruby24-x64/bin/ruby_builtin_dlls/Ruby24-x64/lib/ruby/gems/2
 $ chcp 850
 
 2. 切换编码之后安装：
-$ gem install jekyll
+`$ gem install jekyll`
 
 下面是报错：
 Temporarily enhancing PATH for MSYS/MINGW...
