@@ -120,4 +120,15 @@ CodeALen	equ	$ - LABEL_CODE_A
 
 ```
 
-第218行 ` lldt	ax ` 加载
+第218行 ` lldt	ax ` 加载  lldt 跟 lgdt有点类似，负责加载ldtr，它的操作数是一个选择子，这个选择子对应的就是用来描述LDT 的那个描述符（标号LABEL_DESC_LDT）.
+
+LDT 跟GDT差不多，LDT 中只有一个描述符（标号LABEL_LDT_DESC_CODEA处），这个描述符跟GDT 中的描述符没什么分别！选择子是不一样的，多了SA_TIL 属性！ 定义在pm.inc
+定义如下 ： `SA_TIL EQU 4 `
+
+分析一下就知道SA_TIL 将选择子SelectorLDTCodeA的TI位置为1。
+这位是区别LDT 和 GDT 的关键所在！ TI 被置位，那么系统将从当前的LDT 中寻找相应的操作符。 也就是用到SelectorLDTCodeA时，系统会从LDT 中找到标号LABEL_LDT_DESC_CODEA描述符，并跳转到相应的段中。
+
+
+本代码就只打印一个字符"L"
+
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191030131253.png)
