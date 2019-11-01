@@ -128,6 +128,9 @@ LDT 跟GDT差不多，LDT 中只有一个描述符（标号LABEL_LDT_DESC_CODEA�
 分析一下就知道SA_TIL 将选择子SelectorLDTCodeA的TI位置为1。
 这位是区别LDT 和 GDT 的关键所在！ TI 被置位，那么系统将从当前的LDT 中寻找相应的操作符。 也就是用到SelectorLDTCodeA时，系统会从LDT 中找到标号LABEL_LDT_DESC_CODEA描述符，并跳转到相应的段中。
 
+TI 是描述符表指示器（Table Indicator）， TI＝0 时，表示描述符在 GDT 中； TI＝1 时，描述符在 LDT 中。 
+
+
 
 本代码就只打印一个字符"L"
 
