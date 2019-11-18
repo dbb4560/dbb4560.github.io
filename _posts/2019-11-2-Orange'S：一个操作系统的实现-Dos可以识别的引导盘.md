@@ -382,6 +382,21 @@ LABEL_FILENAME_FOUND:			; 找到 LOADER.BIN 后便来到这里继续
 277		cmp	dx, 0
 278		jz	LABEL_EVEN
 279		mov	byte [bOdd], 1
+；以上部分是整个函数的难点所在，用户计算簇号在FAT表中所对应的FATENTRY相对于FAT首地址的偏移。
+
+；从书上可以得知，FAT12中每个FATENTRY是12位的。所以如下：
+
+7654 | 3210(byte1)    7654|3210(byte2)    7654|3210(byte3)
+
+byte1和byte2的低4位表示一个Entry；根据Big-Endian，Entry内容为：3210(byte2)76543210(byte1)
+
+byte3和byte2的高4位表示一个Entry；根据Big-Endian，Entry内容为：76543210(byte3)7654(byte2)
+
+所以这里存在一个奇偶数的问题，以字节为单位。以上为例，Entry0偏移为0，Entry1偏移为1，Entry2偏移为3。
+
+以INT[“簇号”*1.5]的方式增加。这也就是为什么上面先乘3再除2来计算。
+
+根据DIV指令规定，商保存在ax中，余数在dx中。所以此时ax就是FATENTRY在FAT中以字节为边界的偏移量。
 280	LABEL_EVEN:;偶数
 281		; 现在 ax 中是 FATEntry 在 FAT 中的偏移量,下面来
 282		; 计算 FATEntry 在哪个扇区中(FAT占用不止一个扇区)
