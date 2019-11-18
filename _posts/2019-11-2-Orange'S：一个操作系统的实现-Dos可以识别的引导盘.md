@@ -550,6 +550,6 @@ FAT表项的偏移扇区号 = 保留扇区数 + N*1.5 / 每扇区字节数  <- �
 
 执行效果如图所示，可以看出显示L
 
-
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191119003240.png)
 
 
