@@ -352,6 +352,9 @@ LABEL_FILENAME_FOUND:			; 找到 LOADER.BIN 后便来到这里继续
 
 21 	SectorNoOfRootDirectory	equ	19	; Root Directory 的第一个扇区号
 
+23 	DeltaSectorNo		equ	17	; DeltaSectorNo = BPB_RsvdSecCnt + (BPB_NumFATs * FATSz) - 2
+24 						; 文件的开始Sector号 = DirEntry中的开始Sector号 + 根目录占用Sector数目 + DeltaSectorNo
+
 ...
 
 258	;----------------------------------------------------------------------------
@@ -462,3 +465,91 @@ FAT表项的偏移扇区号 = 保留扇区数 + N*1.5 / 每扇区字节数  <- �
 取得FAT 项的这段代码中有个问题，就是要区别对待扇区号是奇数还是偶数！
 
 由于FAT项目可能会跨越两个扇区，所以在代码中一次总是读2个扇区，以避免在边界发生错误！
+
+现在都准备好了，扇区都可以读取了，FAT 表项也可以读取了。开始加载Loader吧
+
+代码如下：
+
+```
+
+20 	RootDirSectors		equ	14	; 根目录占用空间
+
+....
+
+
+127	LABEL_FILENAME_FOUND:			; 找到 LOADER.BIN 后便来到这里继续
+128		mov	ax, RootDirSectors    ;mov ax,14   RootDirSectors 的值是14
+129		and	di, 0FFE0h		; di -> 当前条目的开始 前面章节提到过，低五位清零 di是32的整数倍了
+130		add	di, 01Ah		; di -> 首 Sector   +26字节偏移就是DIR_FstClus 也就是此条目对应开始的簇号
+131		mov	cx, word [es:di]  ;mov cx,3 通过bochs调试本例中是3
+132		push	cx			; 保存此 Sector 在 FAT 中的序号
+133		add	cx, ax           ; 3+14 = 17
+134		add	cx, DeltaSectorNo	; cl <- LOADER.BIN的起始扇区号(0-based) 3+14+17=34，34是loader.bin的起始扇区
+135		mov	ax, BaseOfLoader
+136		mov	es, ax			; es <- BaseOfLoader
+137		mov	bx, OffsetOfLoader	; bx <- OffsetOfLoader
+138		mov	ax, cx			; ax <- Sector 号  ax=34
+139
+140	LABEL_GOON_LOADING_FILE:
+141		push	ax			; `.
+142		push	bx			;  |  bx=0100h 因为之前就是 bx <- OffsetOfLoader 
+143		mov	ah, 0Eh			;  | 每读一个扇区就在 "Booting  " 后面
+144		mov	al, '.'			;  | 打一个点, 形成这样的效果:
+145		mov	bl, 0Fh			;  | Booting ......
+146		int	10h			;  |
+147		pop	bx			;  |
+148		pop	ax			; /
+149
+150		mov	cl, 1  ;ax=0022h=34，cx=0001h=1，dx=000eh=14，bx=0100h
+151		call	ReadSector
+152		pop	ax			;   取出此 Sector 在 FAT 中的序号     ax=0003h， 把ss：0x00007bfe的值0003赋给ax
+153		call	GetFATEntry
+154		cmp	ax, 0FFFh
+155		jz	LABEL_FILE_LOADED
+156		push	ax			; 保存 Sector 在 FAT 中的序号
+157		mov	dx, RootDirSectors
+158		add	ax, dx
+159		add	ax, DeltaSectorNo
+160		add	bx, [BPB_BytsPerSec]
+161		jmp	LABEL_GOON_LOADING_FILE
+162	LABEL_FILE_LOADED:
+163
+164		mov	dh, 1			; "Ready."
+165		call	DispStr			; 显示字符串
+166
+167	; *****************************************************************************************************
+168		jmp	BaseOfLoader:OffsetOfLoader	; 这一句正式跳转到已加载到内
+169							; 存中的 LOADER.BIN 的开始处，
+170							; 开始执行 LOADER.BIN 的代码。
+171							; Boot Sector 的使命到此结束
+172	; *****************************************************************************************************
+173
+
+```
+
+
+下一步要清屏显示，要不然看不清楚！
+
+清屏显示字符串代码：
+
+```
+
+58 		; 清屏
+59 		mov	ax, 0600h		; AH = 6,  AL = 0h
+60 		mov	bx, 0700h		; 黑底白字(BL = 07h)
+61 		mov	cx, 0			; 左上角: (0, 0)
+62 		mov	dx, 0184fh		; 右下角: (80, 50)
+63 		int	10h			; int 10h
+64 
+65 		mov	dh, 0			; "Booting  "
+66 		call	DispStr			; 显示字符串
+67 		
+
+```
+
+
+执行效果如图所示，可以看出显示L
+
+
+
+
