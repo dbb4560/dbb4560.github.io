@@ -93,6 +93,23 @@ Elf32_word    |  4   |    4    |   无符号大整数
 unsigned char |   1   |   1   |   无符号小整数
 
 
+xxd命令看一下foobar 
+
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191120222451.png)
+
+表示显示0-80个地址，16进制！
+
+e_type 在foobar  是2表示可执行文件。 
+e_machine的值是3表示386机器。 
+e_entry给出进程开始的虚地址，即系统将控制转移的位置，在foobar中地址是0x80480A0。 
+e_phoff指出program header table的文件偏移,这里的值是0x34。 
+e_phentsize表示一个program header table表中的入口的长度（字节数表示），这里的值是0x20。 
+e_phnum给出program header表中的入口数目。这里的值是3个，类似的。 
+e_shoff，e_shentsize，e_shnum 分别表示section header表的文件偏移，这里的值是0x107C，表中每个入口的的字节数，这里的值是0x20和入口数目，这里的值是6个。 
+e_flags给出与处理器相关的标志，针对IA32而言，此项目是0。 
+e_ehsize给出ELF文件头的长度（字节数表示）。 
+e_shstrndx表示section名表的位置，指出在section header表中的索引。
+
 
 2,Program header
 目标文件或者共享文件的program header table描述了系统执行一个程序所需要的段或者其它信息。目标文件的一个段（segment）包含一个或者多个section。Program header只对可执行文件和共享目标文件有意义，对于程序的链接没有任何意义。结构定义如下，可在/usr/include/elf.h中可以找到文件头结构定义： 
@@ -115,4 +132,506 @@ typedef struct
 
 
 ```
+
+实际上Program header描述的是系统准备程序运行所需的一个段（Segment）或其他信息。   举例，看看foobar 的情况。程序头表共有三项（e_phnum=3）,因为前面得知是0x34后面就是program，且大小是0x20.
+所以偏移量是0x34~0x53 , 0x54~0x73 , 0x74~0x93.
+
+xxd命令看一下地址
+
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191120223126.png)
+
+其中p_type描述段的类型； 
+p_offset给出该段相对于文件开关的偏移量； 
+p_vaddr给出该段所在的虚拟地址； 
+p_paddr给出该段的物理地址； 
+p_filesz给出该段的大小，在字节为单元，可能为0； 
+p_memsz给出该段在内存中所占的大小，可能为0； 
+p_filesze与p_memsz的值可能会不相等。
+
+Program header描述的是一个段在文件中的位置、大小以及它被放进内存后所在的位置和大小。如果我们想把一个文件加载进内存的话，需要的正是这个信息！可执行文件中，一个program header描述的内容称为一个段（segment）。Segment包含一个或者多个section!
+
+在foobar 共有三个Program header 取值如表所示
+
+名称     |  Program header 0  | Program header 1 | Program header 2
+-|-|-|-
+
+P_type   | 0x01  | 0x01  |  0x6474E551
+
+p_offset   |   0x00   |  0x1000 |  0
+
+p_vaddr    |  0x8048000    |   0x804A000   |  0
+
+p_paddr  |  0x8048000   |    0x804A000    |  0
+
+p_filesz  |  0x194  |    0x14    |   0
+
+p_memsz  | 0x194    |    0x14    |   0
+
+p_flags  |  0x05   |    0x06    |   0x07
+
+p_align |  0x1000  |    0x1000    |   0x10
+
+
+根据信息就知道foobar加载进内存之后的情形！
+
+Section Header
+
+目标文件的section header table可以定位所有的section，它是一个Elf32_Shdr结构的数组，Section头表的索引是这个数组的下标。有些索引号是保留的，目标文件不能使用这些特殊的索引。 
+Section包含目标文件除了ELF文件头、程序头表、section头表的所有信息，而且目标文件section满足几个条件： 
+目标文件中的每个section都只有一个section头项描述，可以存在不指示任何section的section头项。 
+每个section在文件中占据一块连续的空间。 
+Section之间不可重叠。 
+目标文件可以有非活动空间，各种headers和sections没有覆盖目标文件的每一个字节，这些非活动空间是没有定义的。 
+Section header结构定义如下，可在/usr/include/elf.h中可以找到文件头结构定义： 
+
+```
+
+/* Section header.  */
+
+typedef struct
+{
+  Elf32_Word	sh_name;		/* Section name (string tbl index) */
+  Elf32_Word	sh_type;		/* Section type */
+  Elf32_Word	sh_flags;		/* Section flags */
+  Elf32_Addr	sh_addr;		/* Section virtual addr at execution */
+  Elf32_Off	sh_offset;		/* Section file offset */
+  Elf32_Word	sh_size;		/* Section size in bytes */
+  Elf32_Word	sh_link;		/* Link to another section */
+  Elf32_Word	sh_info;		/* Additional section information */
+  Elf32_Word	sh_addralign;		/* Section alignment */
+  Elf32_Word	sh_entsize;		/* Entry size if section holds table */
+} Elf32_Shdr;
+
+```
+
+其中sh_name指出section的名字，它的值是后面将会讲到的section header string table中的偏移，指出一个以null结尾的字符串。 
+sh_type是类别。 
+sh_flags指示该section在进程执行时的特性。 
+sh_addr指出若此section在进程的内存映像中出现，则给出开始的虚地址。 
+sh_offset给出此section在文件中的偏移。其它字段的意义不太常用，在此不细述。
+
+文件的section含有程序和控制信息，系统使用一些特定的section，并有其固定的类型和属性（由sh_type和sh_info指出）。下面介绍几个常用到的section:“.bss”段含有占据程序内存映像的未初始化数据，当程序开始运行时系统对这段数据初始为零，但这个section并不占文件空间。“.data.”和“.data1”段包含占据内存映像的初始化数据。“.rodata”和“.rodata1”段含程序映像中的只读数据。“.shstrtab”段含有每个section的名字，由section入口结构中的sh_name索引值来获取。“.strtab”段含有表示符号表(symbol table)名字的字符串。“.symtab”段含有文件的符号表，在后文专门介绍。“.text”段包含程序的可执行指令。
+
+
+
+Symbol Table
+
+目标文件的符号表包含定位或重定位程序符号定义和引用时所需要的信息。符号表入口结构定义如下，可在/usr/include/elf.h中可以找到文件头结构定义： 
+
+```
+
+/* Symbol table entry.  */
+
+typedef struct
+{
+  Elf32_Word	st_name;		/* Symbol name (string tbl index) */
+  Elf32_Addr	st_value;		/* Symbol value */
+  Elf32_Word	st_size;		/* Symbol size */
+  unsigned char	st_info;		/* Symbol type and binding */
+  unsigned char	st_other;		/* Symbol visibility */
+  Elf32_Section	st_shndx;		/* Section index */
+} Elf32_Sym;
+
+```
+
+其中st_name包含指向符号表字符串表(strtab)中的索引，从而可以获得符号名。 
+st_value指出符号的值，可能是一个绝对值、地址等。 
+st_size指出符号相关的内存大小，比如一个数据结构包含的字节数等。 
+st_info规定了符号的类型和绑定属性，指出这个符号是一个数据名、函数名、section名还是源文件名；并且指出该符号的绑定属性是local、global还是weak。
+
+
+书上并没有继续分析sector 和symbol 的信息，不过网上有一大堆，可以参考学习！
+
+
+
+### 从Loader到内核
+
+之前学习的Loader需要做的工作就是
+- 加载内核到内存
+- 跳入保护模式
+
+用Loader加载ELF 文件
+
+定义了一个常量头文件，用于boot.asm 和 loader.asm之间共享！把FAT12文件有关的内容写进一个单独的文件（文件名为fat12hdr.inc）
+在两个文件的开头相应位置分别包含进去！
+
+```
+
+1 	; FAT12 磁盘的头
+2 	; ----------------------------------------------------------------------
+3 	BS_OEMName	DB 'ForrestY'	; OEM String, 必须 8 个字节
+4 
+5 	BPB_BytsPerSec	DW 512		; 每扇区字节数
+6 	BPB_SecPerClus	DB 1		; 每簇多少扇区
+7 	BPB_RsvdSecCnt	DW 1		; Boot 记录占用多少扇区
+8 	BPB_NumFATs	DB 2		; 共有多少 FAT 表
+9 	BPB_RootEntCnt	DW 224		; 根目录文件数最大值
+10	BPB_TotSec16	DW 2880		; 逻辑扇区总数
+11	BPB_Media	DB 0xF0		; 媒体描述符
+12	BPB_FATSz16	DW 9		; 每FAT扇区数
+13	BPB_SecPerTrk	DW 18		; 每磁道扇区数
+14	BPB_NumHeads	DW 2		; 磁头数(面数)
+15	BPB_HiddSec	DD 0		; 隐藏扇区数
+16	BPB_TotSec32	DD 0		; 如果 wTotalSectorCount 是 0 由这个值记录扇区数
+17
+18	BS_DrvNum	DB 0		; 中断 13 的驱动器号
+19	BS_Reserved1	DB 0		; 未使用
+20	BS_BootSig	DB 29h		; 扩展引导标记 (29h)
+21	BS_VolID	DD 0		; 卷序列号
+22	BS_VolLab	DB 'OrangeS0.02'; 卷标, 必须 11 个字节
+23	BS_FileSysType	DB 'FAT12   '	; 文件系统类型, 必须 8个字节  
+24	;------------------------------------------------------------------------
+25
+26
+27	; -------------------------------------------------------------------------
+28	; 基于 FAT12 头的一些常量定义，如果头信息改变，下面的常量可能也要做相应改变
+29	; -------------------------------------------------------------------------
+30	; BPB_FATSz16
+31	FATSz			equ	9
+32
+33	; 根目录占用空间:
+34	; RootDirSectors = ((BPB_RootEntCnt*32)+(BPB_BytsPerSec–1))/BPB_BytsPerSec
+35	; 但如果按照此公式代码过长，故定义此宏
+36	RootDirSectors		equ	14
+37
+38	; Root Directory 的第一个扇区号	= BPB_RsvdSecCnt + (BPB_NumFATs * FATSz)
+39	SectorNoOfRootDirectory	equ	19
+40
+41	; FAT1 的第一个扇区号	= BPB_RsvdSecCnt
+42	SectorNoOfFAT1		equ	1
+43
+44	; DeltaSectorNo = BPB_RsvdSecCnt + (BPB_NumFATs * FATSz) - 2
+45	; 文件的开始Sector号 = DirEntry中的开始Sector号 + 根目录占用Sector数目
+46	;                      + DeltaSectorNo
+47	DeltaSectorNo		equ	17
+48
+
+```
+
+在boot.asm 开头代码就是
+
+```
+
+; 下面是 FAT12 磁盘的头, 之所以包含它是因为下面用到了磁盘的一些信息
+%include	"fat12hdr.inc"
+
+```
+
+修改loader.asm ，把他内核放进内存
+
+```
+
+1  	org  0100h
+2  
+3  	BaseOfStack		equ	0100h
+4  
+5  	BaseOfKernelFile	equ	 08000h	; KERNEL.BIN 被加载到的位置 ----  段地址
+6  	OffsetOfKernelFile	equ	     0h	; KERNEL.BIN 被加载到的位置 ---- 偏移地址
+7  
+8  
+9  		jmp	LABEL_START		; Start
+10 
+11 	; 下面是 FAT12 磁盘的头, 之所以包含它是因为下面用到了磁盘的一些信息
+12 	%include	"fat12hdr.inc"
+13 
+14 
+15 	LABEL_START:			; <--- 从这里开始 *************
+16 		mov	ax, cs
+17 		mov	ds, ax
+18 		mov	es, ax
+19 		mov	ss, ax
+20 		mov	sp, BaseOfStack
+21 
+22 		mov	dh, 0			; "Loading  "
+23 		call	DispStr			; 显示字符串
+24 
+25 		; 下面在 A 盘的根目录寻找 KERNEL.BIN
+26 		mov	word [wSectorNo], SectorNoOfRootDirectory	
+27 		xor	ah, ah	; `.
+28 		xor	dl, dl	;  | 软驱复位
+29 		int	13h	; /
+30 	LABEL_SEARCH_IN_ROOT_DIR_BEGIN:
+31 		cmp	word [wRootDirSizeForLoop], 0	; `.
+32 		jz	LABEL_NO_KERNELBIN		;  | 判断根目录区是不是已经读完,
+33 		dec	word [wRootDirSizeForLoop]	; /  读完表示没有找到 KERNEL.BIN
+34 		mov	ax, BaseOfKernelFile
+35 		mov	es, ax			; es <- BaseOfKernelFile
+36 		mov	bx, OffsetOfKernelFile	; bx <- OffsetOfKernelFile
+37 		mov	ax, [wSectorNo]		; ax <- Root Directory 中的某 Sector 号
+38 		mov	cl, 1
+39 		call	ReadSector
+40 
+41 		mov	si, KernelFileName	; ds:si -> "KERNEL  BIN"
+42 		mov	di, OffsetOfKernelFile
+43 		cld
+44 		mov	dx, 10h
+45 	LABEL_SEARCH_FOR_KERNELBIN:
+46 		cmp	dx, 0				  ; `.
+47 		jz	LABEL_GOTO_NEXT_SECTOR_IN_ROOT_DIR;  | 循环次数控制, 如果已经读完
+48 		dec	dx				  ; /  了一个 Sector, 就跳到下一个
+49 		mov	cx, 11
+50 	LABEL_CMP_FILENAME:
+51 		cmp	cx, 0			; `.
+52 		jz	LABEL_FILENAME_FOUND	;  | 循环次数控制, 如果比较了 11 个字符都
+53 		dec	cx			; /  相等, 表示找到
+54 		lodsb				; ds:si -> al
+55 		cmp	al, byte [es:di]	; if al == es:di
+56 		jz	LABEL_GO_ON
+57 		jmp	LABEL_DIFFERENT
+58 	LABEL_GO_ON:
+59 		inc	di
+60 		jmp	LABEL_CMP_FILENAME	;	继续循环
+61 
+62 	LABEL_DIFFERENT:
+63 		and	di, 0FFE0h		; else`. 让 di 是 20h 的倍数
+64 		add	di, 20h			;      |
+65 		mov	si, KernelFileName	;      | di += 20h  下一个目录条目
+66 		jmp	LABEL_SEARCH_FOR_KERNELBIN;   /
+67 
+68 	LABEL_GOTO_NEXT_SECTOR_IN_ROOT_DIR:
+69 		add	word [wSectorNo], 1
+70 		jmp	LABEL_SEARCH_IN_ROOT_DIR_BEGIN
+71 
+72 	LABEL_NO_KERNELBIN:
+73 		mov	dh, 2			; "No KERNEL."
+74 		call	DispStr			; 显示字符串
+75 	%ifdef	_LOADER_DEBUG_
+76 		mov	ax, 4c00h		; `.
+77 		int	21h			; / 没有找到 KERNEL.BIN, 回到 DOS
+78 	%else
+79 		jmp	$			; 没有找到 KERNEL.BIN, 死循环在这里
+80 	%endif
+81 
+82 	LABEL_FILENAME_FOUND:			; 找到 KERNEL.BIN 后便来到这里继续
+83 		mov	ax, RootDirSectors
+84 		and	di, 0FFF0h		; di -> 当前条目的开始
+85 
+86 		push	eax
+87 		mov	eax, [es : di + 01Ch]		; `.
+88 		mov	dword [dwKernelSize], eax	; / 保存 KERNEL.BIN 文件大小
+89 		pop	eax
+90 
+91 		add	di, 01Ah		; di -> 首 Sector
+92 		mov	cx, word [es:di]
+93 		push	cx			; 保存此 Sector 在 FAT 中的序号
+94 		add	cx, ax
+95 		add	cx, DeltaSectorNo	; cl <- KERNEL.BIN 的起始扇区号(0-based)
+96 		mov	ax, BaseOfKernelFile
+97 		mov	es, ax			; es <- BaseOfKernelFile
+98 		mov	bx, OffsetOfKernelFile	; bx <- OffsetOfKernelFile
+99 		mov	ax, cx			; ax <- Sector 号
+100
+101	LABEL_GOON_LOADING_FILE:
+102		push	ax			; `.
+103		push	bx			;  |
+104		mov	ah, 0Eh			;  | 每读一个扇区就在 "Loading  " 后面
+105		mov	al, '.'			;  | 打一个点, 形成这样的效果:
+106		mov	bl, 0Fh			;  | Loading ......
+107		int	10h			;  |
+108		pop	bx			;  |
+109		pop	ax			; /
+110
+111		mov	cl, 1
+112		call	ReadSector
+113		pop	ax			; 取出此 Sector 在 FAT 中的序号
+114		call	GetFATEntry
+115		cmp	ax, 0FFFh
+116		jz	LABEL_FILE_LOADED
+117		push	ax			; 保存 Sector 在 FAT 中的序号
+118		mov	dx, RootDirSectors
+119		add	ax, dx
+120		add	ax, DeltaSectorNo
+121		add	bx, [BPB_BytsPerSec]
+122		jmp	LABEL_GOON_LOADING_FILE
+123	LABEL_FILE_LOADED:
+124
+125		call	KillMotor		; 关闭软驱马达
+126
+127		mov	dh, 1			; "Ready."
+128		call	DispStr			; 显示字符串
+129
+130		jmp	$
+131
+132
+133	;============================================================================
+134	;变量
+135	;----------------------------------------------------------------------------
+136	wRootDirSizeForLoop	dw	RootDirSectors	; Root Directory 占用的扇区数
+137	wSectorNo		dw	0		; 要读取的扇区号
+138	bOdd			db	0		; 奇数还是偶数
+139	dwKernelSize		dd	0		; KERNEL.BIN 文件大小
+140
+141	;============================================================================
+142	;字符串
+143	;----------------------------------------------------------------------------
+144	KernelFileName		db	"KERNEL  BIN", 0	; KERNEL.BIN 之文件名
+145	; 为简化代码, 下面每个字符串的长度均为 MessageLength
+146	MessageLength		equ	9
+147	LoadMessage:		db	"Loading  "
+148	Message1		db	"Ready.   "
+149	Message2		db	"No KERNEL"
+150	;============================================================================
+151
+152	;----------------------------------------------------------------------------
+153	; 函数名: DispStr
+154	;----------------------------------------------------------------------------
+155	; 作用:
+156	;	显示一个字符串, 函数开始时 dh 中应该是字符串序号(0-based)
+157	DispStr:
+158		mov	ax, MessageLength
+159		mul	dh
+160		add	ax, LoadMessage
+161		mov	bp, ax			; ┓
+162		mov	ax, ds			; ┣ ES:BP = 串地址
+163		mov	es, ax			; ┛
+164		mov	cx, MessageLength	; CX = 串长度
+165		mov	ax, 01301h		; AH = 13,  AL = 01h
+166		mov	bx, 0007h		; 页号为0(BH = 0) 黑底白字(BL = 07h)
+167		mov	dl, 0
+168		add	dh, 3			; 从第 3 行往下显示
+169		int	10h			; int 10h
+170		ret
+171	;----------------------------------------------------------------------------
+172	; 函数名: ReadSector
+173	;----------------------------------------------------------------------------
+174	; 作用:
+175	;	从序号(Directory Entry 中的 Sector 号)为 ax 的的 Sector 开始, 将 cl 个 Sector 读入 es:bx 中
+176	ReadSector:
+177		; -----------------------------------------------------------------------
+178		; 怎样由扇区号求扇区在磁盘中的位置 (扇区号 -> 柱面号, 起始扇区, 磁头号)
+179		; -----------------------------------------------------------------------
+180		; 设扇区号为 x
+181		;                           ┌ 柱面号 = y >> 1
+182		;       x           ┌ 商 y ┤
+183		; -------------- => ┤      └ 磁头号 = y & 1
+184		;  每磁道扇区数     │
+185		;                   └ 余 z => 起始扇区号 = z + 1
+186		push	bp
+187		mov	bp, sp
+188		sub	esp, 2			; 辟出两个字节的堆栈区域保存要读的扇区数: byte [bp-2]
+189
+190		mov	byte [bp-2], cl
+191		push	bx			; 保存 bx
+192		mov	bl, [BPB_SecPerTrk]	; bl: 除数
+193		div	bl			; y 在 al 中, z 在 ah 中
+194		inc	ah			; z ++
+195		mov	cl, ah			; cl <- 起始扇区号
+196		mov	dh, al			; dh <- y
+197		shr	al, 1			; y >> 1 (其实是 y/BPB_NumHeads, 这里BPB_NumHeads=2)
+198		mov	ch, al			; ch <- 柱面号
+199		and	dh, 1			; dh & 1 = 磁头号
+200		pop	bx			; 恢复 bx
+201		; 至此, "柱面号, 起始扇区, 磁头号" 全部得到 ^^^^^^^^^^^^^^^^^^^^^^^^
+202		mov	dl, [BS_DrvNum]		; 驱动器号 (0 表示 A 盘)
+203	.GoOnReading:
+204		mov	ah, 2			; 读
+205		mov	al, byte [bp-2]		; 读 al 个扇区
+206		int	13h
+207		jc	.GoOnReading		; 如果读取错误 CF 会被置为 1, 这时就不停地读, 直到正确为止
+208
+209		add	esp, 2
+210		pop	bp
+211
+212		ret
+213
+214	;----------------------------------------------------------------------------
+215	; 函数名: GetFATEntry
+216	;----------------------------------------------------------------------------
+217	; 作用:
+218	;	找到序号为 ax 的 Sector 在 FAT 中的条目, 结果放在 ax 中
+219	;	需要注意的是, 中间需要读 FAT 的扇区到 es:bx 处, 所以函数一开始保存了 es 和 bx
+220	GetFATEntry:
+221		push	es
+222		push	bx
+223		push	ax
+224		mov	ax, BaseOfKernelFile	; ┓
+225		sub	ax, 0100h		; ┣ 在 BaseOfKernelFile 后面留出 4K 空间用于存放 FAT
+226		mov	es, ax			; ┛
+227		pop	ax
+228		mov	byte [bOdd], 0
+229		mov	bx, 3
+230		mul	bx			; dx:ax = ax * 3
+231		mov	bx, 2
+232		div	bx			; dx:ax / 2  ==>  ax <- 商, dx <- 余数
+233		cmp	dx, 0
+234		jz	LABEL_EVEN
+235		mov	byte [bOdd], 1
+236	LABEL_EVEN:;偶数
+237		xor	dx, dx			; 现在 ax 中是 FATEntry 在 FAT 中的偏移量. 下面来计算 FATEntry 在哪个扇区中(FAT占用不止一个扇区)
+238		mov	bx, [BPB_BytsPerSec]
+239		div	bx			; dx:ax / BPB_BytsPerSec  ==>	ax <- 商   (FATEntry 所在的扇区相对于 FAT 来说的扇区号)
+240						;				dx <- 余数 (FATEntry 在扇区内的偏移)。
+241		push	dx
+242		mov	bx, 0			; bx <- 0	于是, es:bx = (BaseOfKernelFile - 100):00 = (BaseOfKernelFile - 100) * 10h
+243		add	ax, SectorNoOfFAT1	; 此句执行之后的 ax 就是 FATEntry 所在的扇区号
+244		mov	cl, 2
+245		call	ReadSector		; 读取 FATEntry 所在的扇区, 一次读两个, 避免在边界发生错误, 因为一个 FATEntry 可能跨越两个扇区
+246		pop	dx
+247		add	bx, dx
+248		mov	ax, [es:bx]
+249		cmp	byte [bOdd], 1
+250		jnz	LABEL_EVEN_2
+251		shr	ax, 4
+252	LABEL_EVEN_2:
+253		and	ax, 0FFFh
+254
+255	LABEL_GET_FAT_ENRY_OK:
+256
+257		pop	bx
+258		pop	es
+259		ret
+260	;----------------------------------------------------------------------------
+261
+262
+263	;----------------------------------------------------------------------------
+264	; 函数名: KillMotor
+265	;----------------------------------------------------------------------------
+266	; 作用:
+267	;	关闭软驱马达
+268	KillMotor:
+269		push	dx
+270		mov	dx, 03F2h
+271		mov	al, 0
+272		out	dx, al
+273		pop	dx
+274		ret
+275	;----------------------------------------------------------------------------
+276
+277
+
+```
+
+可以看出Loader.asm 比上次增加了很多代码，但是和boot.asm 对比发现，是几乎一样的！
+的确如书上所说，增加了call	KillMotor		; 关闭软驱马达
+
+
+加载内核代码写好了，还缺个内核的东东！
+
+
+kernel.asm 代码实现功能还是一个字符功能！
+
+```
+
+1 	; 编译链接方法
+2 	; $ nasm -f elf kernel.asm -o kernel.o
+3 	; $ ld -s kernel.o -o kernel.bin    #‘-s’选项意为“strip all”
+4 
+5 	[section .text]	; 代码在此
+6 
+7 	global _start	; 导出 _start
+8 
+9 	_start:	; 跳到这里来的时候，我们假设 gs 指向显存
+10		mov	ah, 0Fh				; 0000: 黑底    1111: 白字
+11		mov	al, 'K'
+12		mov	[gs:((80 * 1 + 39) * 2)], ax	; 屏幕第 1 行, 第 39 列
+13		jmp	$
+14
+
+```
+
+运行结果如下:
+
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191120234515.png)
+
+
 
