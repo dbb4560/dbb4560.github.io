@@ -634,4 +634,70 @@ kernel.asm 代码实现功能还是一个字符功能！
 ![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191120234515.png)
 
 
+### 跳入保护模式
+
+现在内核加载进去内存了，要跳入保护模式了
+
+GDT 和对应的选择子，三个描述符，分别是0~4GB的可读写段和一个指向显存开始地址的段！
+
+loader.asm
+
+```
+
+%include	"load.inc"
+%include	"pm.inc"
+
+; GDT
+;                            段基址     段界限, 属性
+LABEL_GDT:	    Descriptor 0,            0, 0              ; 空描述符
+LABEL_DESC_FLAT_C:  Descriptor 0,      0fffffh, DA_CR|DA_32|DA_LIMIT_4K ;0-4G
+LABEL_DESC_FLAT_RW: Descriptor 0,      0fffffh, DA_DRW|DA_32|DA_LIMIT_4K;0-4G
+LABEL_DESC_VIDEO:   Descriptor 0B8000h, 0ffffh, DA_DRW|DA_DPL3 ; 显存首地址
+
+GdtLen		equ	$ - LABEL_GDT
+GdtPtr		dw	GdtLen - 1				; 段界限
+		dd	BaseOfLoaderPhyAddr + LABEL_GDT		; 基地址
+
+; GDT 选择子
+SelectorFlatC		equ	LABEL_DESC_FLAT_C	- LABEL_GDT
+SelectorFlatRW		equ	LABEL_DESC_FLAT_RW	- LABEL_GDT
+SelectorVideo		equ	LABEL_DESC_VIDEO	- LABEL_GDT + SA_RPL3
+
+
+
+BaseOfStack	equ	0100h
+PageDirBase	equ	100000h	; 页目录开始地址: 1M
+PageTblBase	equ	101000h	; 页表开始地址:   1M + 4K
+
+
+```
+
+
+前面学习的时候，描述符的段基址都是运行时计算后填入的相应的位置。现在我们也不知道段地址，自然也不知道程序运行时在内存的位置。
+
+Loader 是我们自己加载的，段地址被确定为BaseOfLoader，所以在Loader中出现的标号(变量)的物理地址可以用下面的公式来表示：
+
+标号（变量） 的物理地址 =  BaseOfLoader X 10h + 标号（变量）的偏移。
+
+BaseOfLoader就同时在boot.asm 和loader.asm两个文件中使用，我们也把它和相应的声明放在load.inc 文件中。
+
+load.inc 宏定义
+
+```
+
+BaseOfLoader	    equ	 09000h	; LOADER.BIN 被加载到的位置 ----  段地址
+OffsetOfLoader	    equ	  0100h	; LOADER.BIN 被加载到的位置 ---- 偏移地址
+
+BaseOfLoaderPhyAddr equ	BaseOfLoader*10h ; LOADER.BIN 被加载到的位置 ---- 物理地址
+
+BaseOfKernelFile    equ	 08000h	; KERNEL.BIN 被加载到的位置 ----  段地址
+OffsetOfKernelFile  equ	     0h	; KERNEL.BIN 被加载到的位置 ---- 偏移地址
+
+```
+
+都用%include “load.inc”包含！
+
+
+Loader.asm 32位代码段只打印一个字符 ‘P’。
+
 
