@@ -701,3 +701,4 @@ OffsetOfKernelFile  equ	     0h	; KERNEL.BIN 被加载到的位置 ---- 偏移�
 Loader.asm 32位代码段只打印一个字符 ‘P’。
 
 
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191122002433.png)
