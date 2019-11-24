@@ -1092,3 +1092,405 @@ KernelEntryPointPhyAddr的值是0x30400.  跟ld参数 -Ttext指定的值是一�
 如图所示，cs ds es fs ss 表示的段统统指向内存地址0h， gs表示的段指向显存，这个是进入保护模式设置的！esp GDT等内容也在Loader中，下面对内核扩充的时候，都会挪到内核中，方便控制！
 
 
+### 切换堆栈和GDT
+
+现在我们可以使用c语言了！
+
+代码如下：
+
+```
+
+
+; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;                               kernel.asm
+; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;                                                     Forrest Yu, 2005
+; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+; ----------------------------------------------------------------------
+; 编译连接方法:
+; $ rm -f kernel.bin
+; $ nasm -f elf -o kernel.o kernel.asm
+; $ nasm -f elf -o string.o string.asm
+; $ nasm -f elf -o klib.o klib.asm
+; $ gcc -c -o start.o start.c
+; $ ld -s -Ttext 0x30400 -o kernel.bin kernel.o string.o start.o klib.o
+; $ rm -f kernel.o string.o start.o
+; $ 
+; ----------------------------------------------------------------------
+
+SELECTOR_KERNEL_CS	equ	8
+
+; 导入函数
+extern	cstart
+
+; 导入全局变量
+extern	gdt_ptr
+
+[SECTION .bss]
+StackSpace		resb	2 * 1024
+StackTop:		; 栈顶
+
+[section .text]	; 代码在此
+
+global _start	; 导出 _start
+
+_start:
+	; 此时内存看上去是这样的（更详细的内存情况在 LOADER.ASM 中有说明）：
+	;              ┃                                    ┃
+	;              ┃                 ...                ┃
+	;              ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃■■■■■■Page  Tables■■■■■■┃
+	;              ┃■■■■■(大小由LOADER决定)■■■■┃ PageTblBase
+	;    00101000h ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃■■■■Page Directory Table■■■■┃ PageDirBase = 1M
+	;    00100000h ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃□□□□ Hardware  Reserved □□□□┃ B8000h ← gs
+	;       9FC00h ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃■■■■■■■LOADER.BIN■■■■■■┃ somewhere in LOADER ← esp
+	;       90000h ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃■■■■■■■KERNEL.BIN■■■■■■┃
+	;       80000h ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃■■■■■■■■KERNEL■■■■■■■┃ 30400h ← KERNEL 入口 (KernelEntryPointPhyAddr)
+	;       30000h ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┋                 ...                ┋
+	;              ┋                                    ┋
+	;           0h ┗━━━━━━━━━━━━━━━━━━┛ ← cs, ds, es, fs, ss
+	;
+	;
+	; GDT 以及相应的描述符是这样的：
+	;
+	;		              Descriptors               Selectors
+	;              ┏━━━━━━━━━━━━━━━━━━┓
+	;              ┃         Dummy Descriptor           ┃
+	;              ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃         DESC_FLAT_C    (0～4G)     ┃   8h = cs
+	;              ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃         DESC_FLAT_RW   (0～4G)     ┃  10h = ds, es, fs, ss
+	;              ┣━━━━━━━━━━━━━━━━━━┫
+	;              ┃         DESC_VIDEO                 ┃  1Bh = gs
+	;              ┗━━━━━━━━━━━━━━━━━━┛
+	;
+	; 注意! 在使用 C 代码的时候一定要保证 ds, es, ss 这几个段寄存器的值是一样的
+	; 因为编译器有可能编译出使用它们的代码, 而编译器默认它们是一样的. 比如串拷贝操作会用到 ds 和 es.
+	;
+	;
+
+
+	; 把 esp 从 LOADER 挪到 KERNEL
+	mov	esp, StackTop	; 堆栈在 bss 段中
+
+	sgdt	[gdt_ptr]	; cstart() 中将会用到 gdt_ptr
+	call	cstart		; 在此函数中改变了gdt_ptr，让它指向新的GDT
+	lgdt	[gdt_ptr]	; 使用新的GDT
+
+	;lidt	[idt_ptr]
+
+	jmp	SELECTOR_KERNEL_CS:csinit
+csinit:		; “这个跳转指令强制使用刚刚初始化的结构”——<<OS:D&I 2nd>> P90.
+
+	push	0
+	popfd	; Pop top of stack into EFLAGS
+
+	hlt
+
+```
+
+代码用简单的4个语句就完成切换堆栈和更换GDT 的任务， 其中，stacktop定义在.bss段中，堆栈大小为2kb。操作GDT用到的gdt_ptr和cstart分别是一个全局变量和全局函数，他们定义在start.c中！
+
+
+start.c
+
+```
+
+
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                            start.c
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                                                    Forrest Yu, 2005
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+#include "type.h"
+#include "const.h"
+#include "protect.h"
+
+PUBLIC	void*	memcpy(void* pDst, void* pSrc, int iSize);
+
+PUBLIC	void	disp_str(char * pszInfo);
+
+PUBLIC	u8		gdt_ptr[6];	/* 0~15:Limit  16~47:Base */
+PUBLIC	DESCRIPTOR	gdt[GDT_SIZE];
+
+PUBLIC void cstart()
+{
+
+	disp_str("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+		 "-----\"cstart\" begins-----\n");
+
+	/* 将 LOADER 中的 GDT 复制到新的 GDT 中 */
+	memcpy(&gdt,				   /* New GDT */
+	       (void*)(*((u32*)(&gdt_ptr[2]))),    /* Base  of Old GDT */
+	       *((u16*)(&gdt_ptr[0])) + 1	   /* Limit of Old GDT */
+		);
+	/* gdt_ptr[6] 共 6 个字节：0~15:Limit  16~47:Base。用作 sgdt/lgdt 的参数。*/
+	u16* p_gdt_limit = (u16*)(&gdt_ptr[0]);
+	u32* p_gdt_base  = (u32*)(&gdt_ptr[2]);
+	*p_gdt_limit = GDT_SIZE * sizeof(DESCRIPTOR) - 1;
+	*p_gdt_base  = (u32)&gdt;
+}
+
+
+```
+
+ctart() 首先把位于Loader中的原GDT全部复制给新的GDT中，然后把gdt_ptr中的内容换成新的GDT的基地址和界限。复制GDT使用的函数是memcpy。该函数体放在string.asm!
+
+```
+
+
+; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;                              string.asm
+; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+;                                                       Forrest Yu, 2005
+; ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+[SECTION .text]
+
+; 导出函数
+global	memcpy
+
+
+; ------------------------------------------------------------------------
+; void* memcpy(void* es:pDest, void* ds:pSrc, int iSize);
+; ------------------------------------------------------------------------
+memcpy:
+	push	ebp
+	mov	ebp, esp
+
+	push	esi
+	push	edi
+	push	ecx
+
+	mov	edi, [ebp + 8]	; Destination
+	mov	esi, [ebp + 12]	; Source
+	mov	ecx, [ebp + 16]	; Counter
+.1:
+	cmp	ecx, 0		; 判断计数器
+	jz	.2		; 计数器为零时跳出
+
+	mov	al, [ds:esi]		; ┓
+	inc	esi			; ┃
+					; ┣ 逐字节移动
+	mov	byte [es:edi], al	; ┃
+	inc	edi			; ┛
+
+	dec	ecx		; 计数器减一
+	jmp	.1		; 循环
+.2:
+	mov	eax, [ebp + 8]	; 返回值
+
+	pop	ecx
+	pop	edi
+	pop	esi
+	mov	esp, ebp
+	pop	ebp
+
+	ret			; 函数结束，返回
+; memcpy 结束-------------------------------------------------------------
+
+```
+
+Loader.asm中显示P 和 K 都删除了，新增加了Kliba.asm -- 第三章的内容！
+
+start.c 里面已经增加了
+
+```
+
+disp_str("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+		 "-----\"cstart\" begins-----\n");
+
+```
+
+makefile
+
+```
+
+##################################################
+# Makefile
+##################################################
+
+BOOT:=boot.asm
+LDR:=loader.asm
+KERNEL:=kernel.asm
+BOOT_BIN:=$(subst .asm,.bin,$(BOOT))
+LDR_BIN:=$(subst .asm,.bin,$(LDR))
+KERNEL_BIN:=$(subst .asm,.bin,$(KERNEL))
+
+IMG:=a.img
+FLOPPY:=/mnt/floppy/
+
+.PHONY : everything
+
+everything : $(BOOT_BIN) $(LDR_BIN) $(KERNEL_BIN)
+	ld -m elf_i386 -s -Ttext 0x30400 -o kernel.bin kernel.o string.o start.o kliba.o
+	dd if=$(BOOT_BIN) of=$(IMG) bs=512 count=1 conv=notrunc
+	sudo mount -o loop $(IMG) $(FLOPPY)
+	sudo cp $(LDR_BIN) $(FLOPPY) -v
+	sudo cp $(KERNEL_BIN) $(FLOPPY) -v
+	sudo umount $(FLOPPY)
+
+clean :
+	rm -f $(BOOT_BIN) $(LDR_BIN) $(KERNEL_BIN) *.o
+
+$(BOOT_BIN) : $(BOOT)
+	nasm $< -o $@
+
+$(LDR_BIN) : $(LDR)
+	nasm $< -o $@
+
+$(KERNEL_BIN) : $(KERNEL) start.c string.asm
+	nasm -f elf -o $(subst .asm,.o,$(KERNEL)) $<
+	nasm -f elf -o string.o string.asm
+	nasm -f elf -o kliba.o kliba.asm
+	gcc -m32 -c -fno-builtin -o start.o start.c
+
+
+
+```
+
+编译启动后界面如下：
+
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191124002524.png)
+
+
+### 整理文件夹
+
+- boot.asm 和 Loader.asm放在单独的目录/boot中，包括头文件！
+- klib.asm和string.asm放在/lib中，作为库的形象出现！
+- kernel.asm和start.c放在/kernel里面。
+
+结构就清晰了！
+
+tree
+
+.
+|-- a.img
+|-- bochsrc
+|-- boot
+|   |--boot.asm
+|   |--include
+|   |  |--fat12hdr.inc
+|   |  |--load.inc
+|   |  `--pm.inc
+|   `-- loader.asm
+|-- include
+|   |-- const.h
+|   |-- protect.h
+|   `-- type.h
+|-- kernel
+|  |-- kernel.asm
+|  `--start.c
+`-- lib
+   |-- klib.asm
+   `--string.asm
+
+### makefile
+
+makefile 网上讲的很详细，当然书上也有将的比较细致！
+
+
+
+就是文件多的话，make需要使用参数-f 指定使用makefile.boot，而不是默认使得makefile或者GNUmakefile！
+
+gcc也增加了制定头文件目录 “-I include”。
+
+
+```
+
+#########################
+# Makefile for Orange'S #
+#########################
+
+# Entry point of Orange'S
+# It must have the same value with 'KernelEntryPointPhyAddr' in load.inc!
+ENTRYPOINT	= 0x30400
+
+# Offset of entry point in kernel file
+# It depends on ENTRYPOINT
+ENTRYOFFSET	=   0x400
+
+# Programs, flags, etc.
+ASM		= nasm
+DASM		= ndisasm
+CC		= gcc
+LD		= ld
+ASMBFLAGS	= -I boot/include/
+ASMKFLAGS	= -I include/ -f elf
+CFLAGS		= -I include/ -m32 -c -fno-builtin
+LDFLAGS		=  -s -Ttext $(ENTRYPOINT)
+DASMFLAGS	= -u -o $(ENTRYPOINT) -e $(ENTRYOFFSET)
+
+# This Program
+ORANGESBOOT	= boot/boot.bin boot/loader.bin
+ORANGESKERNEL	= kernel.bin
+OBJS		= kernel/kernel.o kernel/start.o lib/kliba.o lib/string.o
+DASMOUTPUT	= kernel.bin.asm
+
+# All Phony Targets
+.PHONY : everything final image clean realclean disasm all buildimg
+
+# Default starting position
+everything : $(ORANGESBOOT) $(ORANGESKERNEL)
+
+all : realclean everything
+
+final : all clean
+
+image : final buildimg
+
+clean :
+	rm -f $(OBJS)
+
+realclean :
+	rm -f $(OBJS) $(ORANGESBOOT) $(ORANGESKERNEL)
+
+disasm :
+	$(DASM) $(DASMFLAGS) $(ORANGESKERNEL) > $(DASMOUTPUT)
+
+# We assume that "a.img" exists in current folder
+buildimg :
+	dd if=boot/boot.bin of=a.img bs=512 count=1 conv=notrunc
+	sudo mount -o loop a.img /mnt/floppy/
+	sudo cp -fv boot/loader.bin /mnt/floppy/
+	sudo cp -fv kernel.bin /mnt/floppy
+	sudo umount /mnt/floppy
+
+boot/boot.bin : boot/boot.asm boot/include/load.inc boot/include/fat12hdr.inc
+	$(ASM) $(ASMBFLAGS) -o $@ $<
+
+boot/loader.bin : boot/loader.asm boot/include/load.inc \
+			boot/include/fat12hdr.inc boot/include/pm.inc
+	$(ASM) $(ASMBFLAGS) -o $@ $<
+
+$(ORANGESKERNEL) : $(OBJS)
+	$(LD) -m elf_i386  $(LDFLAGS) -o $(ORANGESKERNEL) $(OBJS)
+
+kernel/kernel.o : kernel/kernel.asm
+	$(ASM) $(ASMKFLAGS) -o $@ $<
+
+kernel/start.o : kernel/start.c include/type.h include/const.h include/protect.h
+	$(CC)  $(CFLAGS) -o $@ $<
+
+lib/kliba.o : lib/kliba.asm
+	$(ASM) $(ASMKFLAGS) -o $@ $<
+
+lib/string.o : lib/string.asm
+	$(ASM) $(ASMKFLAGS) -o $@ $<
+
+
+```
+
+` sudo make image `
+
+![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191124002524.png)
+
+
