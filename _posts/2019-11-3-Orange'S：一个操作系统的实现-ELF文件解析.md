@@ -1494,3 +1494,178 @@ lib/string.o : lib/string.asm
 ![](https://raw.githubusercontent.com/dbb4560/StorePicturebed/master/wirtePicture/20191124002524.png)
 
 
+### 添加中断处理
+
+如果要实现进程，需要一种控制权转换机制，就是中断！
+
+之前提到了8259A和建立IDT 中断！
+
+设置一个函数设置8259A
+
+这些基本都是c语言代码了
+
+```
+
+init_8259A()
+{
+
+
+	/* Master 8259, ICW1. */
+	out_byte(INT_M_CTL,	0x11);
+...
+
+}
+
+...
+
+```
+
+详细看源码，这个c语言基础有啥好说的，自己直接看！
+
+
+这个c语言跟前面的汇编代码是一样的效果！
+
+其中调用的 out_byte 是汇编语言函数！ 还有in_byte
+
+因为端口操作可能需要时间，多加了nop延时！
+
+
+```
+
+; ========================================================================
+;                  void out_byte(u16 port, u8 value);
+; ========================================================================
+out_byte:
+	mov	edx, [esp + 4]		; port
+	mov	al, [esp + 4 + 4]	; value
+	out	dx, al
+	nop	; 一点延迟
+	nop
+	ret
+
+
+; ========================================================================
+;                  u8 in_byte(u16 port);
+; ========================================================================
+in_byte:
+	mov	edx, [esp + 4]		; port
+	xor	eax, eax
+	in	al, dx
+	nop	; 一点延迟
+	nop
+	ret
+
+```
+
+因为函数越来越多，增加了好几个头文件，比如proto.h 用来存放函数声明，可以看到start.c 中 函数 disp_str的声明也放在里面了。memcpy 函数也放在一个头文件里面了，这个头文件是新建立的，取名为string.h!
+
+自然也要修改makefile，有个问题就是头文件越来越多，gcc提供了一个参数 “-M” 可以自动生成依赖关系
+
+` gcc -M kernel/start.c -I include `
+
+
+下一步初始化IDT  在start.c中！
+
+EXTERN  定义在const.h中，在global.h 中，如果GLOBAL_VARIABLES_HERE被定义的话，EXTERN会被定义为空值！
+
+start.c 修改后，在kernel添加两句，导入idt_ptr这个符号并加载IDT!
+
+中断或异常发生时 eflags、cs、eip已经被压栈，如果有错误码的话，也会被压栈！
+所以对异常处理的总体思想就是，如果有错误码，则直接把向量号压栈，然后执行一个函数exception_handler，如果没有错误码，则先在栈中压入一个0xFFFFFFFF,在把向量号压栈并随后执行exception_handler。
+
+由于C调用约定是调用者恢复堆栈！不用担心excepttion_handler会破坏堆栈中的eip、cs以及eflags！
+
+为了突出显示，excepttion_handler函数使用disp_color_str()，多一个增加设置颜色的函数！！
+
+disp_int是将整数转换成字符串显示出来！
+
+代码自己详细看！
+
+有了异常处理函数，就设置IDT，把IDT代码放进init_port(),也位于protect.c中。
+
+protect.c 只有调用一个函数，init_idt_desc()，它用来初始化一个门描述符。其中用到的函数指针类型是这样定义的
+
+typedef void （*int_handler） ();
+
+所有的一场处理函数都必须与此声明完全一致！
+
+在init_port()中，所有的描述符都被初始化中断门。函数总用到了若干个宏，INT_VECTOR_开头的宏表示中断向量，DA_386IGATE表示中断门，在protect.h中定义，PROVILEGE_KRNL和PRIVILEGE_USER定义在const.h中！
+
+
+init_8259A（）语句也放在这个函数中！
+
+
+详细请看代码！
+
+
+start.c
+
+调用inti_port（）  修改makefile
+
+
+
+ud2 指令用来产生一个#UD异常！ 
+
+可以在kernel.asm 添加一条指令
+
+```
+ csinit:
+          ud2 
+
+```
+
+
+初始化8259A和设置IDT 这两项任务，目的是为了有异常处理机制！
+
+
+8259A中断例程可以看书上代码！
+
+
+所有的中断都会触发一个函数spurious_irq() 这个函数定义如下
+
+
+```
+
+/*======================================================================*
+                           spurious_irq
+ *======================================================================*/
+PUBLIC void spurious_irq(int irq)
+{
+        disp_str("spurious_irq: ");
+        disp_int(irq);
+        disp_str("\n");
+}
+
+```
+
+看的出来就是打印IRQ号而已！
+
+设置IDT,还是在protect.c中！
+
+后面我们要设置IF位，所以要修改一下，打开键盘中断！
+
+```
+
+	/* Master 8259, OCW1.  */
+	out_byte(INT_M_CTLMASK,	0xFD);
+
+	/* Slave  8259, OCW1.  */
+	out_byte(INT_S_CTLMASK,	0xFF);
+
+```
+我们写入了FD  -  1111 1101，于是键盘中断被打开，其他中断仍然处于屏蔽状态。最后在kernel.asm中添加sti指令设置IF 位！
+
+csint：
+
+    sti
+    hlt
+
+
+
+make，运行，当我们敲击键盘就会出现spurious_irq:0x1
+
+表面IRQ号就是1，对应就是键盘中断！
+
+
+
+
