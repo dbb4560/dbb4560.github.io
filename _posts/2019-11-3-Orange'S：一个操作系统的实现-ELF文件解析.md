@@ -1667,5 +1667,84 @@ make，运行，当我们敲击键盘就会出现spurious_irq:0x1
 表面IRQ号就是1，对应就是键盘中断！
 
 
+### 字符串输出函数disp_str有bug会导致异常
+
+本人使用代码第5章节f节调试代码，用随书的代码发现在cstart.c 中调用同一个disp_str 函数中，第一个显示正常，第二个显示乱码，本能反应应该是堆栈没有保护，看了源代码，并且对照第三章节的代码，发现代码对寄存器esi ax bi bx都进行了操作，但是只保存ebp进程寄存器，所以，增加了 
+```
+
+    push    esi
+    push    edi
+    push    eax
+    push    ebx
+
+...
+
+    pop ebx
+    pop eax
+    pop edi
+    pop esi
+
+```
+
+经过调试，发现不显示了！！！！这太奇怪了，感觉这个数很古老，尝试网上查找资料，发现是在这段代码不一致：
+
+`  mov esi, [ebp + 24] ; pszInfo `
+
+而原书的代码是 
+
+`  mov esi, [ebp + 8] ; pszInfo `
+
+感谢作者！<https://blog.csdn.net/w1300048671/article/details/79700831>
+
+附上代码
+
+```
+
+; ========================================================================
+;          void disp_str(char * info);
+; ========================================================================
+disp_str:
+    push    ebp
+    push    esi
+    push    edi
+    push    eax
+    push    ebx
+    mov ebp, esp
+
+    mov esi, [ebp + 24] ; pszInfo
+    mov edi, [disp_pos]
+    mov ah, 0Fh
+.1:
+    lodsb
+    test    al, al
+    jz  .2
+    cmp al, 0Ah ; 是回车吗?
+    jnz .3
+    push    eax
+    mov eax, edi
+    mov bl, 160
+    div bl
+    and eax, 0FFh
+    inc eax
+    mov bl, 160
+    mul bl
+    mov edi, eax
+    pop eax
+    jmp .1
+.3:
+    mov [gs:edi], ax
+    add edi, 2
+    jmp .1
+
+.2:
+    mov [disp_pos], edi
+    pop ebx
+    pop eax
+    pop edi
+    pop esi
+    pop ebp
+    ret 
+
+```
 
 
