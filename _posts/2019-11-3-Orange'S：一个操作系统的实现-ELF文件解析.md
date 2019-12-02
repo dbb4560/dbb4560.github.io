@@ -1696,7 +1696,7 @@ make，运行，当我们敲击键盘就会出现spurious_irq:0x1
 
 感谢作者！<https://blog.csdn.net/w1300048671/article/details/79700831>
 
-附上代码
+h\lib\kliba.asm 附上代码
 
 ```
 
@@ -1748,6 +1748,9 @@ disp_str:
 ```
 
 
+bug修改后的代码 h\lib\kliba.asm
+
+
 ```
 
 ; ========================================================================
@@ -1755,15 +1758,15 @@ disp_str:
 ; ========================================================================
 disp_color_str:
 	push	ebp
-    push    esi
-    push    edi
-    push    eax
-    push    ebx
+        push    esi
+        push    edi
+        push    eax
+        push    ebx
 	mov	ebp, esp
 
 	mov	esi, [ebp + 24]	; pszInfo
 	mov	edi, [disp_pos]
-	mov	ah, [ebp + 12]	; color 因为两个形参，一个形参也压入堆栈
+	mov	ah, [ebp + 28]	; color
 .1:
 	lodsb
 	test	al, al
@@ -1788,8 +1791,12 @@ disp_color_str:
 
 .2:
 	mov	[disp_pos], edi
-
+        pop     ebx
+        pop     eax
+        pop     edi
+        pop     esi
 	pop	ebp
 	ret
 
 ```
+
