@@ -1711,7 +1711,7 @@ disp_str:
     push    ebx
     mov ebp, esp
 
-    mov esi, [ebp + 24] ; pszInfo
+    mov esi, [ebp + 24] ; pszInfo call压栈占用了4个字节，压入5个寄存器，一个寄存器32位，4字节也就是共20字节 20+4 =24
     mov edi, [disp_pos]
     mov ah, 0Fh
 .1:
@@ -1748,3 +1748,48 @@ disp_str:
 ```
 
 
+```
+
+; ========================================================================
+;                  void disp_color_str(char * info, int color);
+; ========================================================================
+disp_color_str:
+	push	ebp
+    push    esi
+    push    edi
+    push    eax
+    push    ebx
+	mov	ebp, esp
+
+	mov	esi, [ebp + 24]	; pszInfo
+	mov	edi, [disp_pos]
+	mov	ah, [ebp + 12]	; color 因为两个形参，一个形参也压入堆栈
+.1:
+	lodsb
+	test	al, al
+	jz	.2
+	cmp	al, 0Ah	; 是回车吗?
+	jnz	.3
+	push	eax
+	mov	eax, edi
+	mov	bl, 160
+	div	bl
+	and	eax, 0FFh
+	inc	eax
+	mov	bl, 160
+	mul	bl
+	mov	edi, eax
+	pop	eax
+	jmp	.1
+.3:
+	mov	[gs:edi], ax
+	add	edi, 2
+	jmp	.1
+
+.2:
+	mov	[disp_pos], edi
+
+	pop	ebp
+	ret
+
+```
