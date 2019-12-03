@@ -1800,3 +1800,19 @@ disp_color_str:
 
 ```
 
+遇到另外一个问题就是mount `mount: /dev/loop0: can't read superblock错误`
+
+网上查询的解决办法： 
+
+<https://blog.csdn.net/xiaoyi39/article/details/81094747>
+
+
+按照书本的内容执行sudo mount -o loop boot.img /mnt/floppy命令时，可能遇到mount: /dev/loop0: can't read superblock错误。
+
+解决方式如下：sudo mount -t msdos -o loop boot.img /mnt/floppy
+
+尝试了一次，又出现另外一个问题，就是no space left on device！
+
+怀疑是a.img文件的问题，所以直接把第一章的a.img 直接拷贝过来，在编译一下，ok ，问题解决！
+
+
